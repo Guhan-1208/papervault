@@ -47,9 +47,7 @@ Open `index.html` directly in your browser, **or** serve it from any static host
 
 ## Default Accounts
 
-| Role    | Email                  | Password   |
-|---------|------------------------|------------|
-| Admin   | admin@college.edu      | Admin@123  |
+
 
 Students register themselves via the Register tab.
 
