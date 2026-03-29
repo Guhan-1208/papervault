@@ -437,6 +437,41 @@
     </div>
   </div>
 
+  <!-- Delete Confirmation Modal -->
+  <div class="modal-overlay" id="delete-modal">
+    <div class="modal" style="width:420px;">
+      <div class="modal-header">
+        <h2 style="color:var(--danger);">Delete Paper?</h2>
+        <button class="modal-close" onclick="closeDeleteModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:6px;">You are about to permanently delete:</div>
+      <div id="delete-paper-name" style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px;"></div>
+      <div id="delete-paper-meta" style="font-size:13px;color:var(--muted2);margin-bottom:20px;"></div>
+      <div
+        style="background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:var(--radius);padding:12px 14px;font-size:13px;color:var(--danger);margin-bottom:20px;">
+        ⚠️ This will permanently delete the PDF file and cannot be undone.
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger" id="confirm-delete-btn" onclick="confirmDelete()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;">
+            <polyline points="3,6 5,6 21,6" />
+            <path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6" />
+            <path d="M10,11v6" />
+            <path d="M14,11v6" />
+            <path d="M9,6V4a1,1,0,0,1,1-1h4a1,1,0,0,1,1,1v2" />
+          </svg>
+          Yes, Delete Permanently
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast -->
   <div class="toast" id="toast">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="toast-icon">
@@ -666,9 +701,11 @@
 
         if (!papers.length) { grid.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg><h3>No papers found</h3><p>Try adjusting your filters</p></div>`; return; }
 
+        const isAdmin = currentUser?.role === 'admin';
         grid.innerHTML = papers.map(p => `
       <div class="paper-card" onclick="viewPaperById('${p.id}')">
         <div class="paper-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg></div>
+        ${isAdmin ? `<button onclick="event.stopPropagation();openDeleteModal('${p.id}',${JSON.stringify(p.subject).replace(/"/g, '&quot;')},${JSON.stringify(p.dept + ' · ' + p.year + ' · Sem ' + p.semester).replace(/"/g, '&quot;')})" style="position:absolute;top:14px;right:14px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.2);color:var(--danger);border-radius:7px;padding:5px 8px;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:11px;font-weight:500;font-family:'DM Sans',sans-serif;transition:background 0.15s;" onmouseover="this.style.background='rgba(248,113,113,0.25)'" onmouseout="this.style.background='rgba(248,113,113,0.12)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/><path d="M10,11v6"/><path d="M14,11v6"/></svg>Delete</button>` : ''}
         <div class="paper-title">${esc(p.subject)}</div>
         <div class="paper-meta">${esc(p.dept)}${p.code ? ' · ' + esc(p.code) : ''}</div>
         <div class="paper-tags"><span class="tag year">${p.year}</span><span class="tag sem">Sem ${p.semester}</span><span class="tag">${esc(p.exam_type)}</span></div>
@@ -890,14 +927,44 @@
       } catch (e) { }
     }
 
-    async function deletePaper(id) {
-      if (!confirm('Delete this paper permanently?')) return;
-      try {
-        await apiFetch(`/admin/papers/${id}`, { method: 'DELETE' });
-        showToast('Paper deleted.', 'success');
-        renderAdmin();
-      } catch (e) { }
+    let pendingDeleteId = null;
+
+    function openDeleteModal(id, subject, meta) {
+      pendingDeleteId = id;
+      document.getElementById('delete-paper-name').textContent = subject;
+      document.getElementById('delete-paper-meta').textContent = meta;
+      document.getElementById('delete-modal').classList.add('open');
     }
+
+    function closeDeleteModal() {
+      pendingDeleteId = null;
+      document.getElementById('delete-modal').classList.remove('open');
+    }
+
+    async function confirmDelete() {
+      if (!pendingDeleteId) return;
+      const btn = document.getElementById('confirm-delete-btn');
+      btn.disabled = true; btn.textContent = 'Deleting…';
+      try {
+        await apiFetch(`/admin/papers/${pendingDeleteId}`, { method: 'DELETE' });
+        showToast('Paper deleted permanently.', 'success');
+        closeDeleteModal();
+        renderPapers();
+        if (document.getElementById('page-admin').classList.contains('active')) renderAdmin();
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14a2,2,0,0,1-2,2H8a2,2,0,0,1-2-2L5,6"/></svg> Yes, Delete Permanently';
+      }
+    }
+
+    async function deletePaper(id) {
+      // Called from admin panel table — use the modal too
+      const papers = await apiFetch('/admin/papers');
+      const p = papers.find(x => String(x.id) === String(id));
+      openDeleteModal(id, p ? p.subject : 'this paper', p ? `${p.dept} · ${p.year} · Sem ${p.semester}` : '');
+    }
+
+    document.getElementById('delete-modal').addEventListener('click', function (e) { if (e.target === this) closeDeleteModal(); });
 
     // ═══════════════════════════════════════════════════════════════
     //  UTILS
