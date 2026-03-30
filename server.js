@@ -65,9 +65,25 @@ if (!adminExists) {
 }
 
 // ── Middleware ───────────────────────────────────────────────
-app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    // and any origin in development or the configured frontend URL
+    const allowed = process.env.FRONTEND_URL || '*';
+    if (!origin || allowed === '*' || origin === allowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // handle preflight for all routes
 app.use(express.json());
-app.use('/uploads', express.static(UPLOAD_DIR));   // serve PDFs
+app.use('/uploads', express.static(UPLOAD_DIR));
 
 // ── Multer (PDF only, 20 MB limit) ───────────────────────────
 const storage = multer.diskStorage({
