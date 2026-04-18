@@ -121,14 +121,14 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 app.get('/api/papers', async (req, res) => {
   try {
     const { dept, year, semester, q } = req.query;
-    let query = supabase.from('papers').select('*, users(fname, lname)').eq('status', 'approved').order('created_at', { ascending: false });
+    let query = supabase.from('papers').select('*, uploaded_by_user:users!uploaded_by(fname, lname)').eq('status', 'approved').order('created_at', { ascending: false });
     if (dept)     query = query.eq('dept', dept);
     if (year)     query = query.eq('year', year);
     if (semester) query = query.eq('semester', semester);
     if (q)        query = query.or(`subject.ilike.%${q}%,dept.ilike.%${q}%,code.ilike.%${q}%`);
     const { data, error } = await query;
     if (error) throw error;
-    res.json(data.map(p => ({ ...p, uploader_name: p.users ? `${p.users.fname} ${p.users.lname}` : 'Unknown', file_url: getFileUrl(p.file_path) })));
+    res.json(data.map(p => ({ ...p, uploader_name: p.uploaded_by_user ? `${p.uploaded_by_user.fname} ${p.uploaded_by_user.lname}` : 'Unknown', file_url: getFileUrl(p.file_path) })));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -145,10 +145,10 @@ app.get('/api/papers/filters', async (req, res) => {
 
 app.get('/api/papers/:id', async (req, res) => {
   try {
-    const { data: p, error } = await supabase.from('papers').select('*, users(fname, lname)').eq('id', req.params.id).single();
+    const { data: p, error } = await supabase.from('papers').select('*, uploaded_by_user:users!uploaded_by(fname, lname)').eq('id', req.params.id).single();
     if (error||!p) return res.status(404).json({ error: 'Paper not found' });
     if (p.status !== 'approved') return res.status(403).json({ error: 'Paper not yet approved' });
-    res.json({ ...p, uploader_name: p.users ? `${p.users.fname} ${p.users.lname}` : 'Unknown', file_url: getFileUrl(p.file_path) });
+    res.json({ ...p, uploader_name: p.uploaded_by_user ? `${p.uploaded_by_user.fname} ${p.uploaded_by_user.lname}` : 'Unknown', file_url: getFileUrl(p.file_path) });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -189,11 +189,11 @@ app.get('/api/my/papers', authMiddleware, async (req, res) => {
 app.get('/api/admin/papers', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { status } = req.query;
-    let query = supabase.from('papers').select('*, users(fname, lname)').order('created_at', { ascending: false });
+    let query = supabase.from('papers').select('*, uploaded_by_user:users!uploaded_by(fname, lname)').order('created_at', { ascending: false });
     if (status) query = query.eq('status', status);
     const { data, error } = await query;
     if (error) throw error;
-    res.json(data.map(p => ({ ...p, uploader_name: p.users ? `${p.users.fname} ${p.users.lname}` : 'Unknown', file_url: getFileUrl(p.file_path) })));
+    res.json(data.map(p => ({ ...p, uploader_name: p.uploaded_by_user ? `${p.uploaded_by_user.fname} ${p.uploaded_by_user.lname}` : 'Unknown', file_url: getFileUrl(p.file_path) })));
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
 
